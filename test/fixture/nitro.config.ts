@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineNitroConfig } from "nitropack/config";
+import { defineNitroConfig } from "nitro/config";
 import { dirname, resolve } from "node:path";
 
 export default defineNitroConfig({
@@ -32,7 +32,6 @@ export default defineNitroConfig({
     {
       route: "/api/test/*/foo",
       handler: "~/api/hello.ts",
-      // @ts-expect-error #2382
       method: "GET",
     },
     {
@@ -41,7 +40,11 @@ export default defineNitroConfig({
     },
   ],
   devProxy: {
-    "/proxy/example": { target: "https://example.com", changeOrigin: true },
+    "/proxy/example": {
+      target: "https://example.com",
+      changeOrigin: true,
+      ignorePath: true,
+    },
   },
   alias: {
     "#fixture-nitro-utils-extra-absolute": fileURLToPath(
@@ -61,15 +64,10 @@ export default defineNitroConfig({
     "**/_*.txt",
     "!**/_unignored.txt",
   ],
-  appConfig: {
-    "nitro-config": true,
-    dynamic: "initial",
-  },
   runtimeConfig: {
     dynamic: "initial",
     url: "https://{{APP_DOMAIN}}",
   },
-  appConfigFiles: ["~/server.config.ts"],
   publicAssets: [
     {
       baseURL: "build",
@@ -97,7 +95,7 @@ export default defineNitroConfig({
     "/rules/swr/**": { swr: true },
     "/rules/swr-ttl/**": { swr: 60 },
     "/rules/redirect/obj": {
-      redirect: { to: "https://nitro.build/", statusCode: 308 },
+      redirect: { to: "https://nitro.build/", status: 308 },
     },
     "/rules/redirect/wildcard/**": { redirect: "https://nitro.build/**" },
     "/rules/nested/**": { redirect: "/base", headers: { "x-test": "test" } },
@@ -128,6 +126,8 @@ export default defineNitroConfig({
     "* * * * *": "test",
   },
   cloudflare: {
+    nodeCompat: true,
+    deployConfig: true,
     pages: {
       routes: {
         include: ["/*"],
