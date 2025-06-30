@@ -1,4 +1,4 @@
-export default defineHandler(async (event) => {
+export default eventHandler(async (event) => {
   return {
     dev: [process.dev, import.meta.dev],
     preset: [process.preset, import.meta.preset],

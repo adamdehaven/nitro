@@ -13,11 +13,11 @@ import {
   createNitro,
   prepare,
   prerender,
-} from "nitro";
-import type { Nitro, NitroConfig } from "nitro/types";
+} from "nitropack/core";
+import type { Nitro, NitroConfig } from "nitropack/types";
 import { type FetchOptions, fetch } from "ofetch";
 import { join, resolve } from "pathe";
-import { isWindows } from "std-env";
+import { isWindows, nodeMajorVersion } from "std-env";
 import { joinURL } from "ufo";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -132,6 +132,7 @@ export async function setupTest(
     output: {
       dir: ctx.outDir,
     },
+    timing: !ctx.isWorker,
   });
   const nitro = (ctx.nitro = await createNitro(config, {
     compatibilityDate: opts.compatibilityDate || formatDate(new Date()),
@@ -193,11 +194,8 @@ export function testNitro(
     callOpts: { binary?: boolean } = {}
   ): Promise<TestHandlerResult> {
     const result = await _handler(options);
-    if (
-      !(result instanceof Response) &&
-      !["Response", "_Response"].includes(result.constructor.name)
-    ) {
-      throw new TypeError("Expected Response");
+    if (!["Response", "_Response"].includes(result.constructor.name)) {
+      return result as TestHandlerResult;
     }
 
     const headers: Record<string, string | string[]> = {};
@@ -215,7 +213,6 @@ export function testNitro(
         headers[key] = value;
       }
     }
-    headers["set-cookie"] = (result as Response).headers.getSetCookie();
 
     return {
       data: callOpts.binary
@@ -268,8 +265,7 @@ export function testNitro(
     expect(res.status).toBe(404);
   });
 
-  // TODO
-  it.todo("Handle 405 method not allowed", async () => {
+  it("Handle 405 method not allowed", async () => {
     const res = await callHandler({ url: "/api/upload" });
     expect(res.status).toBe(405);
   });
@@ -292,6 +288,14 @@ export function testNitro(
 
   it("binary response", async () => {
     const { data } = await callHandler({ url: "/icon.png" }, { binary: true });
+    let buffer: Buffer;
+    if (ctx.isLambda) {
+      // TODO: Handle base64 decoding in lambda tests themselves
+      expect(typeof data).toBe("string");
+      buffer = Buffer.from(data, "base64");
+    } else {
+      buffer = data;
+    }
     // Check if buffer is a png
     function isBufferPng(buffer: Buffer) {
       return (
@@ -301,7 +305,7 @@ export function testNitro(
         buffer[3] === 0x47
       );
     }
-    expect(isBufferPng(data)).toBe(true);
+    expect(isBufferPng(buffer)).toBe(true);
   });
 
   it("render JSX", async () => {
@@ -398,6 +402,16 @@ export function testNitro(
     expect(data.json.error).toBe(true);
   });
 
+  it.skipIf(isWindows && ctx.preset === "nitro-dev")(
+    "universal import.meta",
+    async () => {
+      const { status, data } = await callHandler({ url: "/api/import-meta" });
+      expect(status).toBe(200);
+      expect(data.testFile).toMatch(/[/\\]test.txt$/);
+      expect(data.hasEnv).toBe(true);
+    }
+  );
+
   it("handles custom server assets", async () => {
     const { data: html, status: htmlStatus } = await callHandler({
       url: "/file?filename=index.html",
@@ -438,7 +452,7 @@ export function testNitro(
         url: "/api/param/prerender4",
       });
       expect(data).toBe("prerender4");
-      expect(headers["content-type"]).toBe("text/plain; custom");
+      expect(headers["content-type"]).toBe("text/plain; charset=utf-16");
     });
   }
 
@@ -476,7 +490,7 @@ export function testNitro(
       const putRes = await callHandler({
         url: "/api/storage/item?key=test:hello",
         method: "PUT",
-        body: `"world"`,
+        body: "world",
       });
       expect(putRes.data).toBe("world");
 
@@ -525,7 +539,7 @@ export function testNitro(
     const { data } = await callHandler({
       url: "/stream",
     });
-    expect(data).toBe("nitroisawesome");
+    expect(data).toBe(ctx.isLambda ? btoa("nitroisawesome") : "nitroisawesome");
   });
 
   it.skipIf(!ctx.supportsEnv)("config", async () => {
@@ -533,12 +547,24 @@ export function testNitro(
       url: "/config",
     });
     expect(data).toMatchObject({
+      appConfig: {
+        dynamic: "from-middleware",
+        "app-config": true,
+        "nitro-config": true,
+        "server-config": true,
+      },
       runtimeConfig: {
         dynamic: "from-env",
         url: "https://test.com",
         app: {
           baseURL: "/",
         },
+      },
+      sharedAppConfig: {
+        dynamic: "initial",
+        "app-config": true,
+        "nitro-config": true,
+        "server-config": true,
       },
       sharedRuntimeConfig: {
         dynamic:
@@ -550,6 +576,16 @@ export function testNitro(
       },
     });
   });
+
+  if (ctx.nitro!.options.timing) {
+    it("set server timing header", async () => {
+      const { status, headers } = await callHandler({
+        url: "/api/hello",
+      });
+      expect(status).toBe(200);
+      expect(headers["server-timing"]).toMatch(/-;dur=\d+;desc="Generate"/);
+    });
+  }
 
   it("static build flags", async () => {
     const { data } = await callHandler({ url: "/static-flags" });
@@ -600,15 +636,42 @@ export function testNitro(
   describe("headers", () => {
     it("handles headers correctly", async () => {
       const { headers } = await callHandler({ url: "/api/headers" });
+      expect(headers["content-type"]).toBe("text/html");
       expect(headers["x-foo"]).toBe("bar");
       expect(headers["x-array"]).toMatch(/^foo,\s?bar$/);
-      const expectedCookies: string | string[] = [
+
+      let expectedCookies: string | string[] = [
         "foo=bar",
         "bar=baz",
         "test=value; Path=/",
         "test2=value; Path=/",
       ];
-      expect(headers["set-cookie"]).toMatchObject(expectedCookies);
+
+      // TODO: Node presets do not split cookies
+      // https://github.com/nitrojs/nitro/issues/1462
+      // (vercel and deno-server uses node only for tests only)
+      const notSplittingPresets = [
+        "node-listener",
+        "nitro-dev",
+        "vercel",
+        (nodeMajorVersion || 0) < 18 && "deno-server",
+        (nodeMajorVersion || 0) < 18 && "bun",
+      ].filter(Boolean);
+      if (notSplittingPresets.includes(ctx.preset)) {
+        expectedCookies =
+          (nodeMajorVersion || 0) < 18
+            ? "foo=bar, bar=baz, test=value; Path=/, test2=value; Path=/"
+            : ["foo=bar, bar=baz", "test=value; Path=/", "test2=value; Path=/"];
+      }
+
+      // TODO: vercel-edge joins all cookies for some reason!
+      if (typeof expectedCookies === "string") {
+        expect(headers["set-cookie"]).toBe(expectedCookies);
+      } else {
+        expect((headers["set-cookie"] as string[]).join(", ")).toBe(
+          expectedCookies.join(", ")
+        );
+      }
     });
   });
 
@@ -661,8 +724,7 @@ export function testNitro(
           data: { timestamp, eventContextCache },
         } = await callHandler({ url: "/api/cached" });
 
-        // TODO
-        // expect(eventContextCache?.options.swr).toBe(true);
+        expect(eventContextCache?.options.swr).toBe(true);
 
         const calls = await Promise.all([
           callHandler({ url: "/api/cached" }),
@@ -672,8 +734,7 @@ export function testNitro(
 
         for (const call of calls) {
           expect(call.data.timestamp).toBe(timestamp);
-          // TODO
-          // expect(call.data.eventContextCache.options.swr).toBe(true);
+          expect(call.data.eventContextCache.options.swr).toBe(true);
         }
       }
     );
@@ -746,13 +807,15 @@ export function testNitro(
   });
 
   it.skipIf(
-    process.env.OFFLINE /* connect */ ||
-      ["cloudflare-worker", "cloudflare-module-legacy"].includes(ctx.preset)
+    ["cloudflare-worker", "cloudflare-module-legacy"].includes(ctx.preset)
   )("nodejs compatibility", async () => {
     const { data, status } = await callHandler({ url: "/node-compat" });
     expect(status).toBe(200);
     for (const key in data) {
-      if (ctx.preset === "vercel-edge" && key === "crypto:createHash") {
+      if (
+        ctx.preset === "vercel-edge" &&
+        (key === "crypto:createHash" || key === "tls:connect")
+      ) {
         continue;
       }
       if (ctx.preset === "deno-server" && key === "globals:BroadcastChannel") {

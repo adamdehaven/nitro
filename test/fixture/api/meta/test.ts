@@ -29,7 +29,7 @@ defineRouteMeta({
   },
 });
 
-export default defineHandler(() => {
+export default defineEventHandler(() => {
   return {
     status: "OK",
   };

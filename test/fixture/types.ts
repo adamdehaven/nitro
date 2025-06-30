@@ -1,8 +1,12 @@
 import { expectTypeOf } from "expect-type";
-import { type EventHandler, type EventHandlerRequest, defineHandler } from "h3";
-import { defineNitroConfig } from "nitro/config";
-import type { $Fetch } from "nitro/types";
-import type { Serialize, Simplify } from "nitro/types";
+import {
+  type EventHandler,
+  type EventHandlerRequest,
+  defineEventHandler,
+} from "h3";
+import { defineNitroConfig } from "nitropack/config";
+import type { $Fetch } from "nitropack/types";
+import type { Serialize, Simplify } from "nitropack/types";
 import { describe, it } from "vitest";
 
 interface TestResponse {
@@ -210,15 +214,14 @@ describe("API routes", () => {
       }>
     >();
 
-    // TODO: Support inffering HTTPError types
-    // expectTypeOf($fetch("/api/serialized/error")).toEqualTypeOf<
-    //   Promise<{
-    //     status: number;
-    //     statusText?: string;
-    //     data?: NonNullable<unknown>;
-    //     message: string;
-    //   }>
-    // >();
+    expectTypeOf($fetch("/api/serialized/error")).toEqualTypeOf<
+      Promise<{
+        statusCode: number;
+        statusMessage?: string;
+        data?: NonNullable<unknown>;
+        message: string;
+      }>
+    >();
 
     expectTypeOf($fetch("/api/serialized/void")).toEqualTypeOf<
       Promise<unknown>
@@ -255,6 +258,7 @@ describe("defineNitroConfig", () => {
       routeRules: {
         "/**": {
           cache: {
+            // @ts-expect-error
             shouldBypassCache(event) {
               return false;
             },
@@ -272,50 +276,49 @@ async function fixture() {
   };
 }
 
-// TODO
-// describe("defineCachedEventHandler", () => {
-//   it("should infer return type", () => {
-//     const a = cachedEventHandler(fixture);
-//     const b = defineHandler(fixture);
-//     expectTypeOf(a).toEqualTypeOf(b);
-//     expectTypeOf(b).toEqualTypeOf<
-//       EventHandler<
-//         EventHandlerRequest,
-//         Promise<{
-//           message: string;
-//         }>
-//       >
-//     >();
-//   });
-//   it("should not allow typed input body", () => {
-//     const b = defineCachedEventHandler<
-//       { body: string },
-//       Promise<{ message: string }>
-//     >(fixture);
-//     expectTypeOf(b).toEqualTypeOf<
-//       EventHandler<{}, Promise<{ message: string }>>
-//     >();
-//   });
-//   it("is backwards compatible with old generic signature", () => {
-//     // prettier-ignore
-//     const a =
-//       defineCachedEventHandler<
-//         Promise<{
-//           message: string;
-//         }>
-//       >(fixture);
-//     const b = defineHandler(fixture);
-//     expectTypeOf(a).toEqualTypeOf(b);
-//     expectTypeOf(b).toEqualTypeOf<
-//       EventHandler<
-//         EventHandlerRequest,
-//         Promise<{
-//           message: string;
-//         }>
-//       >
-//     >();
-//   });
-// });
+describe("defineCachedEventHandler", () => {
+  it("should infer return type", () => {
+    const a = defineCachedEventHandler(fixture);
+    const b = defineEventHandler(fixture);
+    expectTypeOf(a).toEqualTypeOf(b);
+    expectTypeOf(b).toEqualTypeOf<
+      EventHandler<
+        EventHandlerRequest,
+        Promise<{
+          message: string;
+        }>
+      >
+    >();
+  });
+  it("should not allow typed input body", () => {
+    const b = defineCachedEventHandler<
+      { body: string },
+      Promise<{ message: string }>
+    >(fixture);
+    expectTypeOf(b).toEqualTypeOf<
+      EventHandler<{}, Promise<{ message: string }>>
+    >();
+  });
+  it("is backwards compatible with old generic signature", () => {
+    // prettier-ignore
+    const a =
+      defineCachedEventHandler<
+        Promise<{
+          message: string;
+        }>
+      >(fixture);
+    const b = defineEventHandler(fixture);
+    expectTypeOf(a).toEqualTypeOf(b);
+    expectTypeOf(b).toEqualTypeOf<
+      EventHandler<
+        EventHandlerRequest,
+        Promise<{
+          message: string;
+        }>
+      >
+    >();
+  });
+});
 
 describe("type helpers", () => {
   it("Serialize", () => {

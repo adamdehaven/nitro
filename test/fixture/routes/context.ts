@@ -4,10 +4,9 @@ export default defineEventHandler(async () => {
 });
 
 function useTest() {
-  const url = new URL(useRequest().url);
   return {
     context: {
-      path: url.pathname + url.search,
+      path: useEvent().path,
     },
   };
 }

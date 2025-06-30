@@ -1,10 +1,8 @@
-export default defineHandler((event) => {
+export default defineEventHandler((event) => {
   setHeader(event, "x-foo", "bar");
   setHeader(event, "x-array", ["foo", "bar"]);
 
-  // setHeader(event, "Set-Cookie", "foo=bar, bar=baz");
-  appendHeader(event, "Set-Cookie", "foo=bar");
-  appendHeader(event, "Set-Cookie", "bar=baz");
+  setHeader(event, "Set-Cookie", "foo=bar, bar=baz");
   setCookie(event, "test", "value");
   setCookie(event, "test2", "value");
 

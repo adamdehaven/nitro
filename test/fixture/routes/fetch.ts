@@ -1,12 +1,14 @@
-export default defineHandler(async (event) => {
+export default eventHandler(async (event) => {
   const nitroApp = useNitroApp();
   return {
     $fetch: await fetch("/api/hey").then((r) => r.text()),
-    // Removed in v3
-    // "event.fetch": await event.fetch("/api/hey").then((r) => r.text()),
-    // "event.$fetch": await event.$fetch("/api/hey"),
+    "event.fetch": await event.fetch("/api/hey").then((r) => r.text()),
+    "event.$fetch": await event.$fetch("/api/hey"),
     "nitroApp.localFetch": await nitroApp
-      .fetch("/api/hey")
+      .localFetch("/api/hey")
       .then((r) => r.text()),
+    "nitroApp.localCall": await nitroApp
+      .localCall({ url: "/api/hey" })
+      .then((r) => r.body),
   };
 });

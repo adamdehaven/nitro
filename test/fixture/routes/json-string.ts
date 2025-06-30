@@ -1,3 +1,3 @@
-export default defineHandler(() => {
+export default eventHandler(() => {
   return '{"foo":"bar"}';
 });

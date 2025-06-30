@@ -1,6 +1,6 @@
-import { useStorage } from "nitro/runtime";
+import { useStorage } from "nitropack/runtime";
 
-export default defineHandler(async (event) => {
+export default defineEventHandler(async (event) => {
   const query = getQuery(event);
   const filename = query?.filename || "index.html";
   const serverAsset = await useStorage().getItem(`assets/files/${filename}`);

@@ -1,3 +1,3 @@
-export default defineHandler(() => {
+export default defineEventHandler(() => {
   return { foo: new Set(["item"]) };
 });

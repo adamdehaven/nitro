@@ -1,4 +1,4 @@
-export default defineHandler(async () => {
+export default defineEventHandler(async () => {
   const db = useDatabase();
 
   // Create users table

@@ -17,13 +17,10 @@ describe("nitro:preset:nitro-dev", async () => {
       };
     },
     (_ctx, callHandler) => {
-      it.skipIf(process.env.OFFLINE)(
-        "returns correct status for devProxy",
-        async () => {
-          const { status } = await callHandler({ url: "/proxy/example" });
-          expect(status).toBe(200);
-        }
-      );
+      it("returns correct status for devProxy", async () => {
+        const { status } = await callHandler({ url: "/proxy/example" });
+        expect(status).toBe(200);
+      });
 
       it("dev storage", async () => {
         const { data } = await callHandler({ url: "/api/storage/dev" });

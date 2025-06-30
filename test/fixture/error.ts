@@ -1,9 +1,10 @@
-import { defineNitroErrorHandler } from "nitro/runtime";
+import { defineNitroErrorHandler } from "nitropack/runtime";
+import { send } from "h3";
 export default defineNitroErrorHandler(
   async (error, event, { defaultHandler }) => {
-    if (event.url.search.includes("?json")) {
+    if (event.path.includes("?json")) {
       const response = await defaultHandler(error, event, { json: true });
-      return JSON.stringify({ json: response.body }, null, 2);
+      return send(event, JSON.stringify({ json: response.body }, null, 2));
     }
   }
 );

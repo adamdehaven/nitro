@@ -1,4 +1,4 @@
-export default defineHandler((event) => {
+export default defineEventHandler((event) => {
   setHeader(event, "Content-Type", "image/png");
   return Buffer.from(_base64ToArray(_getLogoBase64()));
 });

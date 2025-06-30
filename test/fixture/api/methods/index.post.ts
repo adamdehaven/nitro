@@ -1,1 +1,1 @@
-export default defineHandler(() => "Index post" as const);
+export default defineEventHandler<"Index post">(() => "Index post");

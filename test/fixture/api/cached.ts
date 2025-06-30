@@ -1,4 +1,4 @@
-export default cachedEventHandler(
+export default defineCachedEventHandler(
   (event) => {
     return {
       timestamp: Date.now(),
